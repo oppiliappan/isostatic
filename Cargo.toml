@@ -1,0 +1,16 @@
+[package]
+name = "hedge"
+version = "0.1.0"
+authors = ["Akshay <nerdy@peppe.rs>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hyper = "0.13"
+tokio = { version = "0.2", features = ["full"] }
+pretty_env_logger = "0.4"
+futures-util = "0.3.5"
+rusqlite = "0.24.0"
+nanoid = "0.3.0"
+url = "2.1.1"
