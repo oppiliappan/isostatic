@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
+use hyper::header::CONTENT_TYPE;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use multer::Multipart;
 use nanoid::nanoid;
 use rusqlite::{params, Connection, OpenFlags, NO_PARAMS};
 use url::form_urlencoded;
@@ -34,34 +36,62 @@ fn get_link<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<Option<Strin
     }
 }
 
+async fn process_multipart(body: Body, boundary: String) -> Result<Response<Body>> {
+    let mut m = Multipart::new(body, boundary);
+    if let Some(field) = m.next_field().await? {
+        let content = field
+            .text()
+            .await
+            .with_context(|| format!("Expected field name"))?;
+        eprintln!("{}", content);
+    }
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .body(Body::empty())?)
+}
+
 async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
     let mut conn = init_db("./urls.db_3").unwrap();
-    eprintln!("{:?}", req);
 
     match req.method() {
         &Method::POST => {
-            let b = hyper::body::to_bytes(req)
-                .await
-                .with_context(|| format!("Failed to stream request body!"))?;
+            let boundary = req
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|ct| ct.to_str().ok())
+                .and_then(|ct| multer::parse_boundary(ct).ok());
 
-            let params = form_urlencoded::parse(b.as_ref())
-                .into_owned()
-                .collect::<HashMap<String, String>>();
+            // Send `BAD_REQUEST` status if the content-type is not multipart/form-data.
+            if boundary.is_none() {
+                let b = hyper::body::to_bytes(req)
+                    .await
+                    .with_context(|| format!("Failed to stream request body!"))?;
 
-            if let Some(n) = params.get("shorten") {
-                let shortlink = shorten(n, &mut conn)?;
-                eprintln!("{}", shortlink);
-                let res = Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "text/html")
-                    .body(Body::from(shortlink))?;
-                Ok(res)
+                let params = form_urlencoded::parse(b.as_ref())
+                    .into_owned()
+                    .collect::<HashMap<String, String>>();
+
+                if let Some(n) = params.get("shorten") {
+                    let shortlink = shorten(n, &mut conn)?;
+                    eprintln!("{}", shortlink);
+                    let res = Response::builder()
+                        .status(StatusCode::OK)
+                        .header("content-type", "text/html")
+                        .body(Body::from(shortlink))?;
+                    return Ok(res);
+                } else {
+                    eprintln!("hello world");
+                    let res = Response::builder()
+                        .status(StatusCode::UNPROCESSABLE_ENTITY)
+                        .body(Body::empty())?;
+                    return Ok(res);
+                }
+            }
+
+            if let Ok(res) = process_multipart(req.into_body(), boundary.unwrap()).await {
+                return Ok(res);
             } else {
-                eprintln!("hello world");
-                let res = Response::builder()
-                    .status(StatusCode::UNPROCESSABLE_ENTITY)
-                    .body(Body::empty())?;
-                Ok(res)
+                panic!("nani");
             }
         }
         &Method::GET => {
@@ -113,9 +143,7 @@ async fn main() -> Result<()> {
         make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(shortner_service)) });
 
     let server = Server::bind(&addr).serve(service);
-
     println!("Listening on http://{}", addr);
-
     server.await.unwrap();
     Ok(())
 }
