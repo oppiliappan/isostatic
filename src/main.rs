@@ -4,15 +4,22 @@ use hyper::Server;
 use log::trace;
 
 mod db;
+use db::init_db;
 mod service;
 use service::shortner_service;
+
+use std::sync::{Arc, Mutex};
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
     smol::run(async {
         let addr = ([127, 0, 0, 1], 3000).into();
-        let service =
-            make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(shortner_service)) });
+        let service = make_service_fn(move |_| async {
+            Ok::<_, hyper::Error>(service_fn(move |req| {
+                let db_conn = init_db("./urls.db_3").unwrap();
+                shortner_service(req, db_conn)
+            }))
+        });
         let server = Server::bind(&addr).serve(service);
         trace!("Listening on http://{}", addr);
         server.await.unwrap();

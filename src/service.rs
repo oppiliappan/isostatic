@@ -1,15 +1,14 @@
 use anyhow::{Context, Result};
 use hyper::header::CONTENT_TYPE;
 use hyper::{Body, Method, Request, Response, StatusCode};
-use log::{debug, error, info, trace};
+use log::{error, info, trace};
 use multer::Multipart;
 use nanoid::nanoid;
 use rusqlite::{params, Connection};
 use url::form_urlencoded;
 
 use std::collections::HashMap;
-
-use crate::db::init_db;
+use std::sync::{Arc, Mutex};
 
 fn respond_with_shortlink<S: AsRef<str>>(shortlink: S) -> Response<Body> {
     info!("Successfully generated shortlink");
@@ -39,7 +38,7 @@ fn shorten<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<String> {
     }
 }
 
-fn get_link<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<Option<String>> {
+fn get_link<S: AsRef<str>>(url: S, conn: &Connection) -> Result<Option<String>> {
     let url = url.as_ref();
     let mut stmt = conn.prepare("select * from urls where shortlink = ?1")?;
     let mut rows = stmt.query(params![url.to_string()])?;
@@ -72,9 +71,29 @@ async fn process_multipart(
     Ok(respond_with_status(StatusCode::UNPROCESSABLE_ENTITY))
 }
 
-pub async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
-    let mut conn = init_db("./urls.db_3").unwrap();
+async fn process_form(req: Request<Body>, conn: &mut Connection) -> Result<Response<Body>> {
+    let b = hyper::body::to_bytes(req)
+        .await
+        .with_context(|| format!("Failed to stream request body!"))?;
 
+    let params = form_urlencoded::parse(b.as_ref())
+        .into_owned()
+        .collect::<HashMap<String, String>>();
+
+    if let Some(n) = params.get("shorten") {
+        trace!("POST: {}", &n);
+        let s = shorten(n, conn)?;
+        return Ok(respond_with_shortlink(s));
+    } else {
+        error!("Invalid form");
+        return Ok(respond_with_status(StatusCode::UNPROCESSABLE_ENTITY));
+    }
+}
+
+pub async fn shortner_service(
+    req: Request<Body>,
+    mut conn: Arc<Mutex<Connection>>,
+) -> Result<Response<Body>> {
     match req.method() {
         &Method::POST => {
             let boundary = req
@@ -84,22 +103,7 @@ pub async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
                 .and_then(|ct| multer::parse_boundary(ct).ok());
 
             if boundary.is_none() {
-                let b = hyper::body::to_bytes(req)
-                    .await
-                    .with_context(|| format!("Failed to stream request body!"))?;
-
-                let params = form_urlencoded::parse(b.as_ref())
-                    .into_owned()
-                    .collect::<HashMap<String, String>>();
-
-                if let Some(n) = params.get("shorten") {
-                    trace!("POST: {}", &n);
-                    let s = shorten(n, &mut conn)?;
-                    return Ok(respond_with_shortlink(s));
-                } else {
-                    error!("Invalid form");
-                    return Ok(respond_with_status(StatusCode::UNPROCESSABLE_ENTITY));
-                }
+                return process_form(req, &mut conn).await;
             }
 
             trace!("Attempting to parse multipart request");
@@ -108,7 +112,7 @@ pub async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
         &Method::GET => {
             trace!("GET: {}", req.uri());
             let shortlink = req.uri().path().to_string();
-            let link = get_link(&shortlink[1..], &mut conn);
+            let link = get_link(&shortlink[1..], &conn);
             if let Some(l) = link.unwrap() {
                 trace!("Found in database, redirecting ...");
                 Ok(Response::builder()
