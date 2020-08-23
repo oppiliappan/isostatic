@@ -8,11 +8,13 @@ edition = "2018"
 
 [dependencies]
 hyper = "0.13"
-tokio = { version = "0.2", features = ["full"] }
 rusqlite = "0.24.0"
 nanoid = "0.3.0"
 url = "2.1.1"
 anyhow = "1.0"
-futures = "0.3.5"
 multer = "1.2"
 
+
+[dependencies.smol]
+version = "0.3.3"
+features = [ "tokio02" ]

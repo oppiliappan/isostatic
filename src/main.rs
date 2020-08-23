@@ -10,6 +10,18 @@ use url::form_urlencoded;
 use std::collections::HashMap;
 use std::path::Path;
 
+fn respond_with_shortlink<S: AsRef<str>>(shortlink: S) -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "text/html")
+        .body(Body::from(shortlink.as_ref().to_string()))
+        .unwrap()
+}
+
+fn respond_with_status(s: StatusCode) -> Response<Body> {
+    Response::builder().status(s).body(Body::empty()).unwrap()
+}
+
 fn shorten<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<String> {
     let mut stmt = conn.prepare("select * from urls where link = ?1")?;
     let mut rows = stmt.query(params![url.as_ref().to_string()])?;
@@ -36,14 +48,22 @@ fn get_link<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<Option<Strin
     }
 }
 
-async fn process_multipart(body: Body, boundary: String) -> Result<Response<Body>> {
+async fn process_multipart(
+    body: Body,
+    boundary: String,
+    conn: &mut Connection,
+) -> Result<Response<Body>> {
     let mut m = Multipart::new(body, boundary);
     if let Some(field) = m.next_field().await? {
-        let content = field
-            .text()
-            .await
-            .with_context(|| format!("Expected field name"))?;
-        eprintln!("{}", content);
+        if field.name() == Some("shorten") {
+            let content = field
+                .text()
+                .await
+                .with_context(|| format!("Expected field name"))?;
+
+            let shortlink = shorten(content, conn)?;
+            return Ok(respond_with_shortlink(shortlink));
+        }
     }
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -61,7 +81,6 @@ async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
                 .and_then(|ct| ct.to_str().ok())
                 .and_then(|ct| multer::parse_boundary(ct).ok());
 
-            // Send `BAD_REQUEST` status if the content-type is not multipart/form-data.
             if boundary.is_none() {
                 let b = hyper::body::to_bytes(req)
                     .await
@@ -72,27 +91,14 @@ async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
                     .collect::<HashMap<String, String>>();
 
                 if let Some(n) = params.get("shorten") {
-                    let shortlink = shorten(n, &mut conn)?;
-                    eprintln!("{}", shortlink);
-                    let res = Response::builder()
-                        .status(StatusCode::OK)
-                        .header("content-type", "text/html")
-                        .body(Body::from(shortlink))?;
-                    return Ok(res);
+                    let s = shorten(n, &mut conn)?;
+                    return Ok(respond_with_shortlink(s));
                 } else {
-                    eprintln!("hello world");
-                    let res = Response::builder()
-                        .status(StatusCode::UNPROCESSABLE_ENTITY)
-                        .body(Body::empty())?;
-                    return Ok(res);
+                    return Ok(respond_with_status(StatusCode::UNPROCESSABLE_ENTITY));
                 }
             }
 
-            if let Ok(res) = process_multipart(req.into_body(), boundary.unwrap()).await {
-                return Ok(res);
-            } else {
-                panic!("nani");
-            }
+            return process_multipart(req.into_body(), boundary.unwrap(), &mut conn).await;
         }
         &Method::GET => {
             let shortlink = req.uri().path().to_string();
@@ -135,15 +141,14 @@ fn init_db<P: AsRef<Path>>(p: P) -> Result<Connection> {
     return Ok(conn);
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let addr = ([127, 0, 0, 1], 3000).into();
-
-    let service =
-        make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(shortner_service)) });
-
-    let server = Server::bind(&addr).serve(service);
-    println!("Listening on http://{}", addr);
-    server.await.unwrap();
-    Ok(())
+fn main() -> Result<()> {
+    smol::run(async {
+        let addr = ([127, 0, 0, 1], 3000).into();
+        let service =
+            make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(shortner_service)) });
+        let server = Server::bind(&addr).serve(service);
+        println!("Listening on http://{}", addr);
+        server.await.unwrap();
+        Ok(())
+    })
 }
