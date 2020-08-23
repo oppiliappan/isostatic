@@ -9,8 +9,12 @@ edition = "2018"
 [dependencies]
 hyper = "0.13"
 tokio = { version = "0.2", features = ["full"] }
-pretty_env_logger = "0.4"
-futures-util = "0.3.5"
 rusqlite = "0.24.0"
 nanoid = "0.3.0"
 url = "2.1.1"
+anyhow = "1.0"
+
+[dependencies.multipart]
+default-features = false
+features = [ "hyper", "server" ]
+version = "0.17.0"
