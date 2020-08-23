@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use hyper::header::CONTENT_TYPE;
 use hyper::{Body, Method, Request, Response, StatusCode};
+use log::{debug, error, info, trace};
 use multer::Multipart;
 use nanoid::nanoid;
 use rusqlite::{params, Connection};
@@ -11,6 +12,7 @@ use std::collections::HashMap;
 use crate::db::init_db;
 
 fn respond_with_shortlink<S: AsRef<str>>(shortlink: S) -> Response<Body> {
+    info!("Successfully generated shortlink");
     Response::builder()
         .status(StatusCode::OK)
         .header("content-type", "text/html")
@@ -56,6 +58,7 @@ async fn process_multipart(
     let mut m = Multipart::new(body, boundary);
     if let Some(field) = m.next_field().await? {
         if field.name() == Some("shorten") {
+            trace!("Recieved valid multipart request");
             let content = field
                 .text()
                 .await
@@ -65,9 +68,8 @@ async fn process_multipart(
             return Ok(respond_with_shortlink(shortlink));
         }
     }
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .body(Body::empty())?)
+    trace!("Unprocessable multipart request!");
+    Ok(respond_with_status(StatusCode::UNPROCESSABLE_ENTITY))
 }
 
 pub async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
@@ -91,19 +93,24 @@ pub async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
                     .collect::<HashMap<String, String>>();
 
                 if let Some(n) = params.get("shorten") {
+                    trace!("POST: {}", &n);
                     let s = shorten(n, &mut conn)?;
                     return Ok(respond_with_shortlink(s));
                 } else {
+                    error!("Invalid form");
                     return Ok(respond_with_status(StatusCode::UNPROCESSABLE_ENTITY));
                 }
             }
 
+            trace!("Attempting to parse multipart request");
             return process_multipart(req.into_body(), boundary.unwrap(), &mut conn).await;
         }
         &Method::GET => {
+            trace!("GET: {}", req.uri());
             let shortlink = req.uri().path().to_string();
             let link = get_link(&shortlink[1..], &mut conn);
             if let Some(l) = link.unwrap() {
+                trace!("Found in database, redirecting ...");
                 Ok(Response::builder()
                     .header("Location", &l)
                     .header("content-type", "text/html")
@@ -113,6 +120,7 @@ pub async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
                         &l
                     )))?)
             } else {
+                error!("Resource not found");
                 Ok(respond_with_status(StatusCode::NOT_FOUND))
             }
         }

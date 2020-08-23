@@ -13,6 +13,8 @@ nanoid = "0.3.0"
 url = "2.1.1"
 anyhow = "1.0"
 multer = "1.2"
+log = "0.4"
+pretty_env_logger = "0.4.0"
 
 
 [dependencies.smol]
