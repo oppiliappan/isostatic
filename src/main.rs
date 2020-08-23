@@ -1,19 +1,18 @@
-use futures_util::TryStreamExt;
+use anyhow::{Context, Result};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use nanoid::nanoid;
-use rusqlite::{params, Connection, OpenFlags, Result, NO_PARAMS};
+use rusqlite::{params, Connection, OpenFlags, NO_PARAMS};
 use url::form_urlencoded;
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::str::from_utf8;
+use std::path::Path;
 
 fn shorten<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<String> {
     let mut stmt = conn.prepare("select * from urls where link = ?1")?;
     let mut rows = stmt.query(params![url.as_ref().to_string()])?;
     if let Some(row) = rows.next()? {
-        return row.get(1);
+        return Ok(row.get(1)?);
     } else {
         let new_id = nanoid!(4);
         conn.execute(
@@ -25,7 +24,6 @@ fn shorten<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<String> {
 }
 
 fn get_link<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<Option<String>> {
-    eprintln!("{}", url.as_ref());
     let url = url.as_ref();
     let mut stmt = conn.prepare("select * from urls where shortlink = ?1")?;
     let mut rows = stmt.query(params![url.to_string()])?;
@@ -36,33 +34,59 @@ fn get_link<S: AsRef<str>>(url: S, conn: &mut Connection) -> Result<Option<Strin
     }
 }
 
-async fn shortner_service(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+async fn shortner_service(req: Request<Body>) -> Result<Response<Body>> {
     let mut conn = init_db("./urls.db_3").unwrap();
+    eprintln!("{:?}", req);
 
     match req.method() {
         &Method::POST => {
-            let b = hyper::body::to_bytes(req).await?;
+            let b = hyper::body::to_bytes(req)
+                .await
+                .with_context(|| format!("Failed to stream request body!"))?;
+
             let params = form_urlencoded::parse(b.as_ref())
                 .into_owned()
                 .collect::<HashMap<String, String>>();
 
             if let Some(n) = params.get("shorten") {
-                let shortlink = shorten(n, &mut conn).unwrap();
-                return Ok(Response::new(Body::from(shortlink)));
+                let shortlink = shorten(n, &mut conn)?;
+                eprintln!("{}", shortlink);
+                let res = Response::builder()
+                    .status(StatusCode::OK)
+                    .header("content-type", "text/html")
+                    .body(Body::from(shortlink))?;
+                Ok(res)
             } else {
-                return Ok(Response::new(Body::from("invalid form")));
-            };
+                eprintln!("hello world");
+                let res = Response::builder()
+                    .status(StatusCode::UNPROCESSABLE_ENTITY)
+                    .body(Body::empty())?;
+                Ok(res)
+            }
         }
         &Method::GET => {
             let shortlink = req.uri().path().to_string();
             let link = get_link(&shortlink[1..], &mut conn);
             if let Some(l) = link.unwrap() {
-                return Ok(Response::new(Body::from(l)));
+                Ok(Response::builder()
+                    .header("Location", &l)
+                    .header("content-type", "text/html")
+                    .status(StatusCode::MOVED_PERMANENTLY)
+                    .body(Body::from(format!(
+                        "You will be redirected to: {}. If not, click the link.",
+                        &l
+                    )))?)
             } else {
-                return Ok(Response::new(Body::from("not found!")));
+                Ok(Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::empty())?)
             }
         }
-        _ => unimplemented!(),
+        _ => {
+            return Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::empty())?)
+        }
     }
 }
 
@@ -76,7 +100,7 @@ fn init_db<P: AsRef<Path>>(p: P) -> Result<Connection> {
             link TEXT PRIMARY KEY,
             shortlink TEXT NOT NULL
         )",
-        params![],
+        NO_PARAMS,
     )?;
     return Ok(conn);
 }
