@@ -21,13 +21,12 @@ fn welcome(req: Request<Body>) -> Response<Body> {
     let host = _h.as_ref().map(|h| h.as_bytes()).unwrap_or(b"");
     let text = format!(
         "
-This URL shortening services is powered by hedge.
+This URL shortening service is powered by hedge.
 
     github.com/nerdypepper/hedge
 
 To shorten urls:
-    curl -F'shorten=https://shorten.some/long/url' {}
-        ",
+    curl -F'shorten=https://shorten.some/long/url' {}\n",
         String::from_utf8_lossy(host)
     );
     return Response::builder()
@@ -37,7 +36,7 @@ To shorten urls:
 }
 
 fn respond_with_shortlink<S: AsRef<[u8]>>(shortlink: S, host: &[u8]) -> Response<Body> {
-    let url = [host, b"/", shortlink.as_ref()].concat();
+    let url = [b"https://", host, b"/", shortlink.as_ref(), b"\n"].concat();
     info!("Successfully generated shortlink");
     Response::builder()
         .status(StatusCode::OK)
