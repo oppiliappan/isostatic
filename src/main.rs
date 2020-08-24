@@ -12,10 +12,15 @@ mod service;
 use service::shortner_service;
 
 mod cli;
-use cli::CONFIG;
+use cli::{CONFIG, HELP_TEXT};
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
+
+    if CONFIG.help {
+        println!("{}", HELP_TEXT);
+        return Ok(());
+    }
 
     init_db(&CONFIG.db_path)?;
     smol::run(async {
