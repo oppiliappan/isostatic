@@ -11,7 +11,7 @@ pub fn open_connection<P>(p: P) -> Result<Connection>
 where
     P: AsRef<Path> + fmt::Display,
 {
-    info!("Opened connection to databse");
+    info!("Opened connection to database");
     Ok(Connection::open_with_flags(
         &p,
         OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_READ_WRITE,

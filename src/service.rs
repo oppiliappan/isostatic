@@ -1,6 +1,6 @@
 // extern
 use anyhow::{Context, Result};
-use hyper::header::CONTENT_TYPE;
+use hyper::header::{HeaderValue, CONTENT_TYPE};
 use hyper::{Body, Method, Request, Response, StatusCode};
 use log::{error, info, trace};
 use multer::Multipart;
@@ -11,12 +11,18 @@ use url::form_urlencoded;
 // std
 use std::collections::HashMap;
 
-fn respond_with_shortlink<S: AsRef<str>>(shortlink: S) -> Response<Body> {
+fn get_host(req: &Request<Body>) -> Option<HeaderValue> {
+    let host = req.headers().get("host").map(|h| h.clone())?;
+    return Some(host);
+}
+
+fn respond_with_shortlink<S: AsRef<[u8]>>(shortlink: S, host: &[u8]) -> Response<Body> {
+    let url = [host, b"/", shortlink.as_ref()].concat();
     info!("Successfully generated shortlink");
     Response::builder()
         .status(StatusCode::OK)
         .header("content-type", "text/html")
-        .body(Body::from(shortlink.as_ref().to_string()))
+        .body(Body::from(url))
         .unwrap()
 }
 
@@ -51,11 +57,13 @@ fn get_link<S: AsRef<str>>(url: S, conn: &Connection) -> Result<Option<String>> 
 }
 
 async fn process_multipart(
-    body: Body,
+    req: Request<Body>,
     boundary: String,
     conn: &mut Connection,
 ) -> Result<Response<Body>> {
-    let mut m = Multipart::new(body, boundary);
+    let _h = get_host(&req);
+    let host = _h.as_ref().map(|h| h.as_bytes()).unwrap_or(b"");
+    let mut m = Multipart::new(req.into_body(), boundary);
     if let Some(field) = m.next_field().await? {
         if field.name() == Some("shorten") {
             trace!("Recieved valid multipart request");
@@ -65,7 +73,7 @@ async fn process_multipart(
                 .with_context(|| format!("Expected field name"))?;
 
             let shortlink = shorten(content, conn)?;
-            return Ok(respond_with_shortlink(shortlink));
+            return Ok(respond_with_shortlink(shortlink, host));
         }
     }
     trace!("Unprocessable multipart request!");
@@ -73,6 +81,8 @@ async fn process_multipart(
 }
 
 async fn process_form(req: Request<Body>, conn: &mut Connection) -> Result<Response<Body>> {
+    let _h = get_host(&req);
+    let host = _h.as_ref().map(|h| h.as_bytes()).unwrap_or(b"");
     let b = hyper::body::to_bytes(req)
         .await
         .with_context(|| format!("Failed to stream request body!"))?;
@@ -84,7 +94,7 @@ async fn process_form(req: Request<Body>, conn: &mut Connection) -> Result<Respo
     if let Some(n) = params.get("shorten") {
         trace!("POST: {}", &n);
         let s = shorten(n, conn)?;
-        return Ok(respond_with_shortlink(s));
+        return Ok(respond_with_shortlink(s, host));
     } else {
         error!("Invalid form");
         return Ok(respond_with_status(StatusCode::UNPROCESSABLE_ENTITY));
@@ -105,7 +115,7 @@ pub async fn shortner_service(req: Request<Body>, mut conn: Connection) -> Resul
             }
 
             trace!("Attempting to parse multipart request");
-            return process_multipart(req.into_body(), boundary.unwrap(), &mut conn).await;
+            return process_multipart(req, boundary.unwrap(), &mut conn).await;
         }
         &Method::GET => {
             trace!("GET: {}", req.uri());
