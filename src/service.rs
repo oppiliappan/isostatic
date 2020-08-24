@@ -1,3 +1,4 @@
+// extern
 use anyhow::{Context, Result};
 use hyper::header::CONTENT_TYPE;
 use hyper::{Body, Method, Request, Response, StatusCode};
@@ -7,8 +8,8 @@ use nanoid::nanoid;
 use rusqlite::{params, Connection};
 use url::form_urlencoded;
 
+// std
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 fn respond_with_shortlink<S: AsRef<str>>(shortlink: S) -> Response<Body> {
     info!("Successfully generated shortlink");
@@ -90,10 +91,7 @@ async fn process_form(req: Request<Body>, conn: &mut Connection) -> Result<Respo
     }
 }
 
-pub async fn shortner_service(
-    req: Request<Body>,
-    mut conn: Arc<Mutex<Connection>>,
-) -> Result<Response<Body>> {
+pub async fn shortner_service(req: Request<Body>, mut conn: Connection) -> Result<Response<Body>> {
     match req.method() {
         &Method::POST => {
             let boundary = req
