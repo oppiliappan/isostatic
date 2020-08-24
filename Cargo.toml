@@ -3,8 +3,13 @@ name = "hedge"
 version = "0.1.0"
 authors = ["Akshay <nerdy@peppe.rs>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "minimal url shortner"
+homepage = "https://github.com/nerdypepper/hedge"
+repository = "https://github.com/nerdypepper/hedge"
+readme = "./readme.md"
+keywords = [ "url", "server", "url shortner" ]
+categories = [ "asynchronous", "compression" ]
+license = "MIT"
 
 [dependencies]
 hyper = "0.13"

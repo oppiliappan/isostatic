@@ -26,6 +26,7 @@ This URL shortening service is powered by hedge.
     github.com/nerdypepper/hedge
 
 To shorten urls:
+
     curl -F'shorten=https://shorten.some/long/url' {}\n",
         String::from_utf8_lossy(host)
     );
