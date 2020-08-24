@@ -11,14 +11,18 @@ use db::{init_db, open_connection};
 mod service;
 use service::shortner_service;
 
+mod cli;
+use cli::CONFIG;
+
 fn main() -> Result<()> {
     pretty_env_logger::init();
-    init_db("./urls.db_3")?;
+
+    init_db(&CONFIG.db_path)?;
     smol::run(async {
-        let addr = ([127, 0, 0, 1], 3000).into();
-        let service = make_service_fn(move |_| async {
+        let addr = ([127, 0, 0, 1], CONFIG.port).into();
+        let service = make_service_fn(|_| async {
             Ok::<_, hyper::Error>(service_fn(move |req| {
-                let db_conn = open_connection("./urls.db_3").unwrap();
+                let db_conn = open_connection(&CONFIG.db_path).unwrap();
                 shortner_service(req, db_conn)
             }))
         });
