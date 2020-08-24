@@ -16,6 +16,26 @@ fn get_host(req: &Request<Body>) -> Option<HeaderValue> {
     return Some(host);
 }
 
+fn welcome(req: Request<Body>) -> Response<Body> {
+    let _h = get_host(&req);
+    let host = _h.as_ref().map(|h| h.as_bytes()).unwrap_or(b"");
+    let text = format!(
+        "
+This URL shortening services is powered by hedge.
+
+    github.com/nerdypepper/hedge
+
+To shorten urls:
+    curl -F'shorten=https://shorten.some/long/url' {}
+        ",
+        String::from_utf8_lossy(host)
+    );
+    return Response::builder()
+        .header("content-type", "text/plain")
+        .body(Body::from(text))
+        .unwrap();
+}
+
 fn respond_with_shortlink<S: AsRef<[u8]>>(shortlink: S, host: &[u8]) -> Response<Body> {
     let url = [host, b"/", shortlink.as_ref()].concat();
     info!("Successfully generated shortlink");
@@ -102,8 +122,8 @@ async fn process_form(req: Request<Body>, conn: &mut Connection) -> Result<Respo
 }
 
 pub async fn shortner_service(req: Request<Body>, mut conn: Connection) -> Result<Response<Body>> {
-    match req.method() {
-        &Method::POST => {
+    match (req.method(), req.uri().path()) {
+        (&Method::POST, "/") => {
             let boundary = req
                 .headers()
                 .get(CONTENT_TYPE)
@@ -117,7 +137,8 @@ pub async fn shortner_service(req: Request<Body>, mut conn: Connection) -> Resul
             trace!("Attempting to parse multipart request");
             return process_multipart(req, boundary.unwrap(), &mut conn).await;
         }
-        &Method::GET => {
+        (&Method::GET, "/") => Ok(welcome(req)),
+        (&Method::GET, _) => {
             trace!("GET: {}", req.uri());
             let shortlink = req.uri().path().to_string();
             let link = get_link(&shortlink[1..], &conn);
