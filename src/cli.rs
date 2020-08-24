@@ -28,7 +28,7 @@ pub static HELP_TEXT: &'static str = "
 Usage
 -----
 
-hedge [-h | --help] [--port <number>] [--database <path>]
+isostatic [-h | --help] [--port <number>] [--database <path>]
 
 Options
 -------

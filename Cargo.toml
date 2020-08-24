@@ -1,13 +1,13 @@
 [package]
-name = "hedge"
+name = "isostatic"
 version = "0.1.0"
 authors = ["Akshay <nerdy@peppe.rs>"]
 edition = "2018"
 description = "minimal url shortner"
-homepage = "https://github.com/nerdypepper/hedge"
-repository = "https://github.com/nerdypepper/hedge"
+homepage = "https://github.com/nerdypepper/isostatic"
+repository = "https://github.com/nerdypepper/isostatic"
 readme = "./readme.md"
-keywords = [ "url", "server", "url shortner" ]
+keywords = [ "url", "server", "url-shortner" ]
 categories = [ "asynchronous", "compression" ]
 license = "MIT"
 

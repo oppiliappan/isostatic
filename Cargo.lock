@@ -385,23 +385,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hedge"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "hyper",
- "lazy_static",
- "log",
- "multer",
- "nanoid",
- "pico-args",
- "pretty_env_logger",
- "rusqlite",
- "smol",
- "url",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -498,6 +481,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "isostatic"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hyper",
+ "lazy_static",
+ "log",
+ "multer",
+ "nanoid",
+ "pico-args",
+ "pretty_env_logger",
+ "rusqlite",
+ "smol",
+ "url",
 ]
 
 [[package]]

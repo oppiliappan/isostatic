@@ -21,9 +21,9 @@ fn welcome(req: Request<Body>) -> Response<Body> {
     let host = _h.as_ref().map(|h| h.as_bytes()).unwrap_or(b"");
     let text = format!(
         "
-This URL shortening service is powered by hedge.
+This URL shortening service is powered by isostatic.
 
-    github.com/nerdypepper/hedge
+    github.com/nerdypepper/isostatic
 
 To shorten urls:
 

@@ -1,4 +1,4 @@
-### hedge
+### isostatic
 
 > minimal url shortner
 
@@ -17,7 +17,7 @@ $ nix-build
 Usage
 -----
 
-hedge [-h | --help] [--port <number>] [--database <path>]
+isostatic [-h | --help] [--port <number>] [--database <path>]
 
 Options
 -------
@@ -32,5 +32,5 @@ Options
 start with
 
 ```shell
-$ RUST_LOG=hedge=trace hedge
+$ RUST_LOG=isostatic=trace isostatic
 ```
