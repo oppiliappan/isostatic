@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 pub struct Config {
     pub help: bool,
+    pub version: bool,
     pub port: u16,
     pub db_path: PathBuf,
 }
@@ -14,6 +15,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             help: false,
+            version: false,
             port: 3000,
             db_path: "./urls.db_3".into(),
         }
@@ -36,12 +38,14 @@ Options
     -h, --help       Prints help information
         --port       Port to start the server on (default: 3000)
         --database   Path to database (default: urls.db_3)
+    -v, --version    Print crate version
 ";
 
 fn parse_args() -> Result<Config> {
     let mut _a = pico_args::Arguments::from_env();
     return Ok(Config {
         help: _a.contains(["-h", "--help"]),
+        version: _a.contains(["-v", "--version"]),
         port: _a
             .opt_value_from_fn("--port", str::parse::<u16>)?
             .unwrap_or(7878),
@@ -49,4 +53,8 @@ fn parse_args() -> Result<Config> {
             .opt_value_from_str("--database")?
             .unwrap_or(PathBuf::from("./urls.db_3")),
     });
+}
+
+pub fn version() {
+    println!("isostatic v{}", env!("CARGO_PKG_VERSION"));
 }

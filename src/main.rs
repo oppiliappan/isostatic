@@ -12,13 +12,18 @@ mod service;
 use service::shortner_service;
 
 mod cli;
-use cli::{CONFIG, HELP_TEXT};
+use cli::{version, CONFIG, HELP_TEXT};
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
 
     if CONFIG.help {
+        version();
         println!("{}", HELP_TEXT);
+        return Ok(());
+    }
+    if CONFIG.version {
+        version();
         return Ok(());
     }
 
